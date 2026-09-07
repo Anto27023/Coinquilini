@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Bell } from 'lucide-react';
+import { Menu, Bell, ArrowLeft } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
 
 export default function Topbar({ 
   title, 
+  currentTab,
+  onBackToHome,
   onToggleSidebar, 
   members = [], 
   notifications = [], 
@@ -29,14 +31,24 @@ export default function Topbar({
   return (
     <header className="topbar">
       <div className="topbar-left">
-        {/* Pulsante hamburger VISIBILE E FUNZIONANTE per TUTTE le larghezze sotto 1100px */}
-        <button 
-          className="hamburger-btn" 
-          onClick={onToggleSidebar}
-          aria-label="Apri menu laterale"
-        >
-          <Menu size={22} />
-        </button>
+        {currentTab && currentTab !== 'home' ? (
+          <button 
+            className="topbar-back-btn" 
+            onClick={onBackToHome}
+            aria-label="Torna alla Home"
+            title="Torna alla Home"
+          >
+            <ArrowLeft size={20} />
+          </button>
+        ) : (
+          <button 
+            className="hamburger-btn" 
+            onClick={onToggleSidebar}
+            aria-label="Apri menu laterale"
+          >
+            <Menu size={22} />
+          </button>
+        )}
         <h1 className="page-title">{title}</h1>
       </div>
 

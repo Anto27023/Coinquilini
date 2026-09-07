@@ -4,6 +4,32 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+const REMEMBER_ME_KEY = 'fuorisede_remember_me';
+const authStorage = {
+  getItem: (key) => {
+    const storage = localStorage.getItem(REMEMBER_ME_KEY) === 'false' ? sessionStorage : localStorage;
+    return storage.getItem(key);
+  },
+  setItem: (key, value) => {
+    const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) !== 'false';
+    if (!rememberMe) localStorage.removeItem(key);
+    (rememberMe ? localStorage : sessionStorage).setItem(key, value);
+  },
+  removeItem: (key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+};
+
+export function setRememberMePreference(rememberMe) {
+  localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? 'true' : 'false');
+  if (!rememberMe) {
+    Object.keys(localStorage)
+      .filter(key => key.startsWith('sb-'))
+      .forEach(key => localStorage.removeItem(key));
+  }
+}
+
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
@@ -12,7 +38,7 @@ export const isSupabaseConfigured = Boolean(
 
 // Inizializzazione client Supabase (usato se le variabili d'ambiente sono valide)
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, { auth: { storage: authStorage } })
   : null;
 
 /**

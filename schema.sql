@@ -214,6 +214,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET row_security = off;
 
+-- RPC per abbandonare la propria casa
+CREATE OR REPLACE FUNCTION public.leave_house()
+RETURNS JSONB AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_result JSONB;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Utente non autenticato';
+  END IF;
+
+  DELETE FROM public.house_members WHERE user_id = v_user_id;
+
+  SELECT json_build_object('success', true)::jsonb INTO v_result;
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security = off;
+
 
 -- ====================================================================
 -- 7. TABELLE DATI DELLA CASA & POLICY RLS

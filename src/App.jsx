@@ -598,6 +598,27 @@ export default function App() {
     setHouse(null);
   };
 
+  const handleLeaveHouse = async () => {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.rpc('leave_house');
+      if (error) {
+        console.error('Error leaving house:', error);
+        return;
+      }
+    } else {
+      const state = getLocalState();
+      state.house = null;
+      state.members = [];
+      state.notifications = [];
+      saveLocalState(state);
+    }
+
+    setHouse(null);
+    setMembers([]);
+    setNotifications([]);
+    setCurrentTab('home');
+  };
+
   // Calcolo saldi e rimborsi minimi tramite algoritmo dedicato
   const balancesObj = calculateBalancesAndSettlements(expenses, settlements, members);
 
@@ -660,6 +681,8 @@ export default function App() {
       <div className="main-wrapper">
         <Topbar 
           title={pageTitles[currentTab] || 'Coinquilini'}
+          currentTab={currentTab}
+          onBackToHome={() => setCurrentTab('home')}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           members={members}
           notifications={notifications}
@@ -779,6 +802,7 @@ export default function App() {
               features={house.features}
               onUpdateHouse={handleUpdateHouse}
               onUpdateProfile={handleUpdateProfile}
+              onLeaveHouse={handleLeaveHouse}
               onLogout={handleLogout}
             />
           )}

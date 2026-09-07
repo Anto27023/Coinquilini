@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Home, Mail, Lock, User, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
-import { supabase, isSupabaseConfigured, getLocalState, saveLocalState } from '../lib/supabase';
+import { Home, Mail, Lock, User, ArrowRight, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { supabase, isSupabaseConfigured, getLocalState, saveLocalState, setRememberMePreference } from '../lib/supabase';
 
 export default function AuthView({ onAuthSuccess }) {
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [fullName, setFullName] = useState('');
   
   const [loading, setLoading] = useState(false);
@@ -34,6 +36,9 @@ export default function AuthView({ onAuthSuccess }) {
       setLoading(false);
       return;
     }
+
+    // Salva preferenza 'Rimani connesso'
+    setRememberMePreference(rememberMe);
 
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -138,10 +143,10 @@ export default function AuthView({ onAuthSuccess }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '24px',
+      padding: '24px 16px',
       backgroundColor: 'var(--bg)'
     }}>
-      <div className="card" style={{ width: '100%', maxWidth: '440px', padding: '36px 32px' }}>
+      <div className="card" style={{ width: '100%', maxWidth: '440px', padding: '32px 24px' }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{
@@ -282,16 +287,41 @@ export default function AuthView({ onAuthSuccess }) {
                   Password dimenticata?
                 </button>
               </div>
-              <input
-                type="password"
-                className="form-control"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="password-input-wrapper">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-control"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  title={showPassword ? 'Nascondi password' : 'Mostra password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
-            <button type="submit" className="btn btn-primary btn-block" disabled={loading} style={{ marginTop: '16px' }}>
+
+            {/* Checkbox Rimani Connesso */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+              />
+              <label htmlFor="rememberMe" style={{ fontSize: '0.85rem', color: 'var(--text)', cursor: 'pointer' }}>
+                Rimani connesso
+              </label>
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
               {loading ? 'Accesso in corso...' : 'Accedi'}
             </button>
           </form>
@@ -322,15 +352,25 @@ export default function AuthView({ onAuthSuccess }) {
             </div>
             <div className="form-group">
               <label className="form-label">Password</label>
-              <input
-                type="password"
-                className="form-control"
-                placeholder="Minimo 6 caratteri"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
+              <div className="password-input-wrapper">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-control"
+                  placeholder="Minimo 6 caratteri"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  title={showPassword ? 'Nascondi password' : 'Mostra password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
             <button type="submit" className="btn btn-primary btn-block" disabled={loading} style={{ marginTop: '16px' }}>
               {loading ? 'Registrazione...' : 'Crea account'}
@@ -341,3 +381,4 @@ export default function AuthView({ onAuthSuccess }) {
     </div>
   );
 }
+

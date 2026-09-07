@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Settings, Copy, Check, LogOut, Save, User, Shield, Sliders } from 'lucide-react';
+import { Settings, Copy, Check, LogOut, Save, User, Shield, Sliders, UserX, AlertTriangle } from 'lucide-react';
+import Modal from '../components/Modal';
 
 export default function SettingsView({ 
   currentUser, 
@@ -7,11 +8,13 @@ export default function SettingsView({
   features = {}, 
   onUpdateHouse, 
   onUpdateProfile, 
+  onLeaveHouse,
   onLogout 
 }) {
   // Stato Casa
   const [houseName, setHouseName] = useState(house?.name || '');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
 
   // Stato Profilo Personale
   const [fullName, setFullName] = useState(currentUser?.full_name || '');
@@ -264,19 +267,70 @@ export default function SettingsView({
         </form>
       </div>
 
-      {/* 4. Pulsante Disconnessione */}
+      {/* 4. Abbandona Casa e Disconnessione */}
       <div className="card" style={{ borderColor: 'var(--danger-soft)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--danger)' }}>Disconnessione</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Esci dal tuo account su questo dispositivo.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Abbandona Casa */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
+            <div>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--danger)' }}>Abbandona questa Casa</h4>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                Rimuovi la tua appartenenza a {house?.name || 'questa casa'}. Non riceverai più notifiche.
+              </p>
+            </div>
+            <button className="btn btn-danger" onClick={() => setIsLeaveModalOpen(true)}>
+              <UserX size={18} />
+              Abbandona Casa
+            </button>
           </div>
-          <button className="btn btn-danger" onClick={onLogout}>
-            <LogOut size={18} />
-            Disconnettiti
-          </button>
+
+          {/* Disconnessione */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>Disconnessione</h4>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Esci dal tuo account su questo dispositivo.</p>
+            </div>
+            <button className="btn btn-secondary" onClick={onLogout}>
+              <LogOut size={18} />
+              Disconnettiti
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* MODALE CONFERMA ABBANDONA CASA */}
+      <Modal isOpen={isLeaveModalOpen} onClose={() => setIsLeaveModalOpen(false)} title="Confermi di voler abbandonare la casa?">
+        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--danger-soft)',
+            color: 'var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px auto'
+          }}>
+            <AlertTriangle size={24} />
+          </div>
+          <p style={{ fontSize: '0.95rem', color: 'var(--text)', marginBottom: '12px' }}>
+            Stai per uscire da <strong>{house?.name}</strong>.
+          </p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '24px' }}>
+            Se abbandoni la casa non avrai più accesso ai dati condivisi né riceverai notifiche. Potrai comunque creare o accedere a un'altra casa.
+          </p>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="btn btn-secondary btn-block" onClick={() => setIsLeaveModalOpen(false)}>
+              Annulla
+            </button>
+            <button className="btn btn-danger btn-block" onClick={onLeaveHouse}>
+              Sì, Abbandona
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
+
