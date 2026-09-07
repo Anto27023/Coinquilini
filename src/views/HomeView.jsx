@@ -43,9 +43,8 @@ export default function HomeView({
   const myBalanceItem = balanceList.find(b => b.userId === currentUser?.id);
   const myNetBalance = myBalanceItem ? myBalanceItem.netBalance : 0;
 
-  // Nome dell'utente (solo il primo nome per la formula di benvenuto)
-  const fullName = currentUser?.full_name || 'Coinquilino';
-  const firstName = fullName.split(' ')[0];
+  // Usa il nome completo inserito dall'utente durante la registrazione.
+  const displayName = currentUser?.full_name?.trim() || 'Coinquilino';
 
   // Calcolo scadenze prossime (entro 7 giorni) ed urgenti (entro 3 giorni o scadute)
   const now = new Date();
@@ -480,7 +479,7 @@ export default function HomeView({
       {/* 1. Hero Welcome & Stats — REQUISITO 7: "Ciao (nome), benvenuto a casa!" senza emoticon */}
       <div className="welcome-hero">
         <div className="welcome-text">
-          <h2>Ciao {firstName}, benvenuto a casa!</h2>
+          <h2>Ciao {displayName}, benvenuto a casa!</h2>
           <p>Dashboard della casa: <strong>{house?.name || 'Coinquilini'}</strong></p>
         </div>
         <div className="welcome-stats">
