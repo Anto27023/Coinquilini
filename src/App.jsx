@@ -659,7 +659,7 @@ export default function App() {
 
       <div className="main-wrapper">
         <Topbar 
-          title={pageTitles[currentTab] || 'Fuorisede Facile'}
+          title={pageTitles[currentTab] || 'Coinquilini'}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           members={members}
           notifications={notifications}

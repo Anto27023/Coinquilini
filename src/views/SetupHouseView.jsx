@@ -146,7 +146,7 @@ export default function SetupHouseView({ currentUser, onHouseJoined }) {
             <Home size={28} />
           </div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary-dark)' }}>
-            Benvenuto in Fuorisede Facile!
+            Benvenuto in Coinquilini!
           </h2>
           <p style={{ fontSize: '0.9rem', color: 'var(--muted)', marginTop: '4px' }}>
             Per iniziare, crea la tua casa condivisa o inserisci il codice fornito dai tuoi coinquilini.

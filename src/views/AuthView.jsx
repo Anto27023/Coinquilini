@@ -158,7 +158,7 @@ export default function AuthView({ onAuthSuccess }) {
             <Home size={28} />
           </div>
           <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--primary-dark)' }}>
-            Fuorisede Facile
+            Coinquilini
           </h2>
           <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginTop: '4px' }}>
             La PWA per gestire la tua casa condivisa

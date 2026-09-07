@@ -65,7 +65,7 @@ export default function Sidebar({
               <HomeIcon size={20} />
             </div>
             <div>
-              <div className="app-title">Fuorisede Facile</div>
+              <div className="app-title">Coinquilini</div>
               <div className="house-subtitle">{houseName || 'La tua casa'}</div>
             </div>
           </div>

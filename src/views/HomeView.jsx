@@ -58,7 +58,7 @@ export default function HomeView({
       <div className="welcome-hero">
         <div className="welcome-text">
           <h2>Ciao, {currentUser?.full_name || 'Coinquilino'}! 👋</h2>
-          <p>Benvenuto nella dashboard della tua casa: <strong>{house?.name || 'Fuorisede Facile'}</strong></p>
+          <p>Benvenuto nella dashboard della tua casa: <strong>{house?.name || 'Coinquilini'}</strong></p>
         </div>
         <div className="welcome-stats">
           <div className="stat-pill">
