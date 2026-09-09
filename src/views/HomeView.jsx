@@ -43,8 +43,12 @@ export default function HomeView({
   const myBalanceItem = balanceList.find(b => b.userId === currentUser?.id);
   const myNetBalance = myBalanceItem ? myBalanceItem.netBalance : 0;
 
-  // Usa il nome completo inserito dall'utente durante la registrazione.
-  const displayName = currentUser?.full_name?.trim() || 'Coinquilino';
+  // Usa il nome completo o di registrazione dell'utente
+  const rawName = currentUser?.full_name?.trim() 
+    || currentUser?.user_metadata?.full_name?.trim() 
+    || (currentUser?.email ? currentUser.email.split('@')[0] : '') 
+    || 'Coinquilino';
+  const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
   // Calcolo scadenze prossime (entro 7 giorni) ed urgenti (entro 3 giorni o scadute)
   const now = new Date();

@@ -53,7 +53,7 @@ export default function AuthView({ onAuthSuccess }) {
       setTimeout(() => {
         setLoading(false);
         const state = getLocalState();
-        const user = { ...state.user, email, full_name: fullName || 'Marco Rossi' };
+        const user = { ...state.user, email, full_name: state.user?.full_name || fullName || 'Marco Rossi' };
         state.user = user;
         saveLocalState(state);
         onAuthSuccess(user);

@@ -93,10 +93,10 @@ export default function Sidebar({
         <div className="sidebar-footer">
           <div className="user-mini-card">
             <div className="avatar accent-1" style={{ width: '32px', height: '32px', fontSize: '0.78rem' }}>
-              {(currentUser?.full_name || 'U').charAt(0).toUpperCase()}
+              {(currentUser?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="user-mini-info">
-              <div className="user-mini-name">{currentUser?.full_name || 'Utente'}</div>
+              <div className="user-mini-name">{currentUser?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Utente'}</div>
               <div className="user-mini-email">{currentUser?.email || ''}</div>
             </div>
             <button 
