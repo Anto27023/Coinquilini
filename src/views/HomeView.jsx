@@ -146,29 +146,41 @@ export default function HomeView({
 
   const cardClassName = (key) => `card ${cardSizes[key] === 'large' ? 'card-large' : ''}`;
 
+  // Helper per renderizzare l'header delle schede con controlli integrati senza overflow
+  const renderCardHeader = (title, icon, tabKey, cardKey, actionLabel) => (
+    <div className="card-header">
+      <h3 className="card-title">
+        {icon}
+        <span>{title}</span>
+      </h3>
+      {isEditMode ? (
+        <div className="card-controls" title="Personalizza questa scheda">
+          <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf(cardKey), -1)} title="Sposta prima">
+            <ChevronUp size={15} />
+          </button>
+          <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf(cardKey), 1)} title="Sposta dopo">
+            <ChevronDown size={15} />
+          </button>
+          <button className="card-control-btn" onClick={() => toggleCardSize(cardKey)} title={cardSizes[cardKey] === 'large' ? 'Riduci scheda' : 'Allarga scheda'}>
+            {cardSizes[cardKey] === 'large' ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+          <button className="card-control-btn card-control-hide" onClick={() => hideCard(cardKey)} title="Nascondi scheda">
+            <EyeOff size={15} />
+          </button>
+        </div>
+      ) : (
+        <button className="card-action-link" onClick={() => setCurrentTab(tabKey)}>
+          {actionLabel} <ArrowRight size={14} />
+        </button>
+      )}
+    </div>
+  );
+
   // Mappa delle schede renderizzabili
   const renderCardMap = {
     guests: (features.guests !== false && !hiddenCards.includes('guests')) && (
       <div className={cardClassName('guests')} key="guests">
-        <div className="card-header">
-          <h3 className="card-title">
-            <Users size={18} />
-            <span>Prossimi Ospiti Annunciati</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('guests'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('guests'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('guests')} title={cardSizes.guests === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.guests === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('guests')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('guests')}>
-              Registro <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Prossimi Ospiti Annunciati', <Users size={18} />, 'guests', 'guests', 'Registro')}
         {guests.length === 0 ? (
           <p className="empty-state">Nessun ospite annunciato.</p>
         ) : (
@@ -191,25 +203,7 @@ export default function HomeView({
 
     expenses: (!hiddenCards.includes('expenses')) && (
       <div className={cardClassName('expenses')} key="expenses">
-        <div className="card-header">
-          <h3 className="card-title">
-            <CreditCard size={18} />
-            <span>Saldo Coinquilini</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('expenses'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('expenses'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('expenses')} title={cardSizes.expenses === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.expenses === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('expenses')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('expenses')}>
-              Vedi Spese <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Saldo Coinquilini', <CreditCard size={18} />, 'expenses', 'expenses', 'Vedi Spese')}
         {suggestedSettlements.length === 0 ? (
           <p className="empty-state">Tutti i conti sono in pareggio.</p>
         ) : (
@@ -233,25 +227,7 @@ export default function HomeView({
 
     deadlines: (!hiddenCards.includes('deadlines')) && (
       <div className={cardClassName('deadlines')} key="deadlines">
-        <div className="card-header">
-          <h3 className="card-title">
-            <Calendar size={18} />
-            <span>Scadenze (Prossimi 7 giorni)</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('deadlines'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('deadlines'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('deadlines')} title={cardSizes.deadlines === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.deadlines === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('deadlines')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('deadlines')}>
-              Gestisci <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Scadenze (Prossimi 7 giorni)', <Calendar size={18} />, 'deadlines', 'deadlines', 'Gestisci')}
         {next7DaysDeadlines.length === 0 ? (
           <p className="empty-state">Nessuna scadenza nei prossimi 7 giorni.</p>
         ) : (
@@ -272,25 +248,7 @@ export default function HomeView({
 
     tasks: (!hiddenCards.includes('tasks')) && (
       <div className={cardClassName('tasks')} key="tasks">
-        <div className="card-header">
-          <h3 className="card-title">
-            <CheckSquare size={18} />
-            <span>Turni di Casa</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('tasks'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('tasks'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('tasks')} title={cardSizes.tasks === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.tasks === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('tasks')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('tasks')}>
-              Vedi Turni <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Turni di Casa', <CheckSquare size={18} />, 'tasks', 'tasks', 'Vedi Turni')}
         {tasks.length === 0 ? (
           <p className="empty-state">Nessun turno inserito.</p>
         ) : (
@@ -316,25 +274,7 @@ export default function HomeView({
 
     shopping_list: (features.shopping_list !== false && !hiddenCards.includes('shopping_list')) && (
       <div className={cardClassName('shopping_list')} key="shopping_list">
-        <div className="card-header">
-          <h3 className="card-title">
-            <ShoppingBag size={18} />
-            <span>Lista della Spesa</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('shopping_list'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('shopping_list'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('shopping_list')} title={cardSizes.shopping_list === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.shopping_list === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('shopping_list')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('shopping_list')}>
-              Apri Lista <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Lista della Spesa', <ShoppingBag size={18} />, 'shopping_list', 'shopping_list', 'Apri Lista')}
         {shoppingList.filter(s => !s.is_purchased).length === 0 ? (
           <p className="empty-state">Niente da comprare al momento.</p>
         ) : (
@@ -355,25 +295,7 @@ export default function HomeView({
 
     bathroom: (features.bathroom !== false && !hiddenCards.includes('bathroom')) && (
       <div className={cardClassName('bathroom')} key="bathroom">
-        <div className="card-header">
-          <h3 className="card-title">
-            <Bath size={18} />
-            <span>Prossime Prenotazioni Bagno</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('bathroom'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('bathroom'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('bathroom')} title={cardSizes.bathroom === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.bathroom === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('bathroom')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('bathroom')}>
-              Prenota <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Prenotazioni Bagno', <Bath size={18} />, 'bathroom', 'bathroom', 'Prenota')}
         {bathroomSlots.length === 0 ? (
           <p className="empty-state">Nessuna prenotazione imminente.</p>
         ) : (
@@ -397,25 +319,7 @@ export default function HomeView({
 
     rules: (features.rules !== false && !hiddenCards.includes('rules')) && (
       <div className={cardClassName('rules')} key="rules">
-        <div className="card-header">
-          <h3 className="card-title">
-            <FileText size={18} />
-            <span>Regole della Casa</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('rules'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('rules'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('rules')} title={cardSizes.rules === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.rules === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('rules')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('rules')}>
-              Tutte le Regole <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Regole della Casa', <FileText size={18} />, 'rules', 'rules', 'Tutte le Regole')}
         {rules.length === 0 ? (
           <p className="empty-state">Nessuna regola stabilita.</p>
         ) : (
@@ -434,25 +338,7 @@ export default function HomeView({
 
     board: (!hiddenCards.includes('board')) && (
       <div className={cardClassName('board')} key="board">
-        <div className="card-header">
-          <h3 className="card-title">
-            <MessageSquare size={18} />
-            <span>Bacheca Messaggi</span>
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isEditMode && (
-              <div className="card-controls">
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('board'), -1)} title="Sposta su"><ChevronUp size={16} /></button>
-                <button className="card-control-btn" onClick={() => moveCard(cardOrder.indexOf('board'), 1)} title="Sposta giù"><ChevronDown size={16} /></button>
-                <button className="card-control-btn" onClick={() => toggleCardSize('board')} title={cardSizes.board === 'large' ? 'Riduci scheda' : 'Ingrandisci scheda'}>{cardSizes.board === 'large' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                <button className="card-control-btn" onClick={() => hideCard('board')} title="Nascondi scheda"><EyeOff size={16} /></button>
-              </div>
-            )}
-            <button className="card-action-link" onClick={() => setCurrentTab('board')}>
-              Apri Bacheca <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderCardHeader('Bacheca Messaggi', <MessageSquare size={18} />, 'board', 'board', 'Apri Bacheca')}
         {boardMessages.length === 0 ? (
           <p className="empty-state">Nessun messaggio in bacheca.</p>
         ) : (
@@ -501,11 +387,11 @@ export default function HomeView({
       </div>
 
       {/* Pulsante per personalizzare o ripristinare il layout della Dashboard */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px' }}>
+      <div className="dashboard-customizer-toolbar">
         {hiddenCards.length > 0 && (
           <button className="btn btn-secondary btn-sm" onClick={resetLayout}>
             <RotateCcw size={14} />
-            Ripristina schede nascoste ({hiddenCards.length})
+            <span>Ripristina schede ({hiddenCards.length})</span>
           </button>
         )}
         <button 
@@ -513,9 +399,24 @@ export default function HomeView({
           onClick={() => setIsEditMode(!isEditMode)}
         >
           <Sliders size={14} />
-          {isEditMode ? 'Finito' : 'Personalizza Schede'}
+          <span>{isEditMode ? 'Salva modifiche' : 'Personalizza Schede'}</span>
         </button>
       </div>
+
+      {/* Banner informativo quando la modalità personalizzazione è attiva */}
+      {isEditMode && (
+        <div className="customization-banner">
+          <div className="customization-banner-content">
+            <Sliders size={18} className="customization-banner-icon" />
+            <div className="customization-banner-text">
+              <strong>Modalità Personalizzazione attiva:</strong>
+              <span>
+                Usa le frecce su/giù per riordinare, le frecce diagonali per allargare o ridurre la scheda, e l'occhio per nasconderla. Quando hai finito, clicca su "Salva modifiche".
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. Riquadro Urgenze (se ci sono scadenze urgenti entro 3 giorni o scadute) */}
       {urgentDeadlines.length > 0 && (

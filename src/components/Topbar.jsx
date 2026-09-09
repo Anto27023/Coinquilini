@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Bell, ArrowLeft } from 'lucide-react';
+import { Menu, Bell, ArrowLeft, Sun, Moon } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
 
 export default function Topbar({ 
@@ -9,7 +9,9 @@ export default function Topbar({
   onToggleSidebar, 
   members = [], 
   notifications = [], 
-  onMarkAllRead 
+  onMarkAllRead,
+  currentTheme = 'light',
+  onSelectTheme
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef(null);
@@ -69,6 +71,18 @@ export default function Topbar({
             );
           })}
         </div>
+
+        {/* Selettore Veloce Tema Chiaro/Scuro */}
+        {onSelectTheme && (
+          <button 
+            className="theme-toggle-btn"
+            onClick={() => onSelectTheme(currentTheme === 'dark' || currentTheme === 'midnight' || currentTheme === 'forest' ? 'light' : 'dark')}
+            aria-label="Cambia tema chiaro o scuro"
+            title={currentTheme === 'light' || currentTheme === 'warm' ? 'Attiva tema scuro' : 'Attiva tema chiaro'}
+          >
+            {currentTheme === 'light' || currentTheme === 'warm' ? <Moon size={19} /> : <Sun size={19} />}
+          </button>
+        )}
 
         {/* Pulsante Notifiche con Campanella */}
         <div style={{ position: 'relative' }} ref={dropdownRef}>

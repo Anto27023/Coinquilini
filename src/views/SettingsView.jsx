@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Copy, Check, LogOut, Save, User, Shield, Sliders, UserX, AlertTriangle } from 'lucide-react';
+import { Settings, Copy, Check, LogOut, Save, User, Shield, Sliders, UserX, AlertTriangle, Palette } from 'lucide-react';
 import Modal from '../components/Modal';
 
 export default function SettingsView({ 
@@ -9,7 +9,9 @@ export default function SettingsView({
   onUpdateHouse, 
   onUpdateProfile, 
   onLeaveHouse,
-  onLogout 
+  onLogout,
+  currentTheme = 'light',
+  onSelectTheme
 }) {
   // Stato Casa
   const [houseName, setHouseName] = useState(house?.name || '');
@@ -140,7 +142,114 @@ export default function SettingsView({
         </form>
       </div>
 
-      {/* 2. Interruttori Funzionalità Opzionali */}
+      {/* 2. Tema e Aspetto dell'App */}
+      <div className="card" style={{ marginBottom: '28px' }}>
+        <div className="card-header">
+          <h3 className="card-title">
+            <Palette size={20} />
+            <span>Tema e Aspetto dell'App</span>
+          </h3>
+        </div>
+        <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: '16px' }}>
+          Personalizza l'interfaccia con la tavolozza di colori che preferisci. Il tema viene salvato automaticamente nel tuo browser.
+        </p>
+
+        <div className="theme-grid">
+          {[
+            {
+              id: 'light',
+              name: 'Chiaro Standard',
+              desc: 'Blu navy e salvia equilibrati',
+              bg: '#eef1f5',
+              surface: '#ffffff',
+              primary: '#273b59',
+              accent: '#3f6f68'
+            },
+            {
+              id: 'dark',
+              name: 'Scuro Moderno',
+              desc: 'Ardesia e azzurro rilassante',
+              bg: '#0f172a',
+              surface: '#1e293b',
+              primary: '#38bdf8',
+              accent: '#10b981'
+            },
+            {
+              id: 'midnight',
+              name: 'Notte Profonda',
+              desc: 'Nero AMOLED e ciano',
+              bg: '#030712',
+              surface: '#111827',
+              primary: '#818cf8',
+              accent: '#06b6d4'
+            },
+            {
+              id: 'warm',
+              name: 'Caldo Terracotta',
+              desc: 'Argilla, ambra e toni caldi',
+              bg: '#faf6f1',
+              surface: '#ffffff',
+              primary: '#c25e36',
+              accent: '#557552'
+            },
+            {
+              id: 'forest',
+              name: 'Foresta Nordica',
+              desc: 'Verde pino e menta luminosa',
+              bg: '#061b14',
+              surface: '#0e2a20',
+              primary: '#34d399',
+              accent: '#a7f3d0'
+            }
+          ].map(t => {
+            const isActive = currentTheme === t.id;
+            return (
+              <div 
+                key={t.id}
+                className={`theme-card ${isActive ? 'active' : ''}`}
+                onClick={() => onSelectTheme && onSelectTheme(t.id)}
+                role="button"
+                tabIndex={0}
+              >
+                {isActive && (
+                  <div className="theme-card-check">
+                    <Check size={14} />
+                  </div>
+                )}
+                <div 
+                  className="theme-card-preview"
+                  style={{ backgroundColor: t.bg }}
+                >
+                  <div 
+                    className="theme-preview-bar"
+                    style={{ backgroundColor: t.primary }}
+                  />
+                  <div 
+                    className="theme-preview-card"
+                    style={{ backgroundColor: t.surface, borderColor: t.primary + '40' }}
+                  >
+                    <div 
+                      className="theme-preview-dot"
+                      style={{ backgroundColor: t.accent }}
+                    />
+                    <div 
+                      className="theme-preview-line"
+                      style={{ backgroundColor: t.primary + '60' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="theme-card-info">
+                  <span className="theme-card-name">{t.name}</span>
+                  <span className="theme-card-desc">{t.desc}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. Interruttori Funzionalità Opzionali */}
       <div className="card" style={{ marginBottom: '28px' }}>
         <div className="card-header">
           <h3 className="card-title">

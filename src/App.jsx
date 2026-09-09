@@ -39,6 +39,13 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('home');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem('coinquilini_theme') || 'light');
+
+  // Applica e memorizza il tema visivo selezionato
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('coinquilini_theme', theme);
+  }, [theme]);
 
   // Sincronizza il profilo Supabase in profiles con auth.users
   const syncUserProfile = async (authUser) => {
@@ -831,6 +838,8 @@ export default function App() {
           members={members}
           notifications={notifications}
           onMarkAllRead={handleMarkAllNotificationsRead}
+          currentTheme={theme}
+          onSelectTheme={setTheme}
         />
 
         <main className="main-content">
@@ -948,6 +957,8 @@ export default function App() {
               onUpdateProfile={handleUpdateProfile}
               onLeaveHouse={handleLeaveHouse}
               onLogout={handleLogout}
+              currentTheme={theme}
+              onSelectTheme={setTheme}
             />
           )}
         </main>
