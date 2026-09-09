@@ -561,6 +561,30 @@ CREATE POLICY "Membri possono inviare notifiche nella casa"
   WITH CHECK (public.is_house_member(house_id));
 
 
+-- J) SOTTOSCRIZIONI PUSH WEB (push_subscriptions)
+-- Memorizza i token sicuri del browser/telefono per inviare notifiche a schermo spento
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON public.push_subscriptions(user_id);
+
+DROP POLICY IF EXISTS "Gli utenti gestiscono le proprie sottoscrizioni push" ON public.push_subscriptions;
+CREATE POLICY "Gli utenti gestiscono le proprie sottoscrizioni push"
+  ON public.push_subscriptions FOR ALL
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+
 -- ====================================================================
 -- 8. ABILITAZIONE REALTIME DI SUPABASE (Sicura ed Idempotente)
 -- Per aggiornare in tempo reale la dashboard di tutti i coinquilini

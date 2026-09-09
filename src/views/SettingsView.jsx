@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Copy, Check, LogOut, Save, User, Shield, Sliders, UserX, AlertTriangle, Palette } from 'lucide-react';
+import { Settings, Copy, Check, LogOut, Save, User, Shield, Sliders, UserX, AlertTriangle, Palette, BellRing, Smartphone, Send } from 'lucide-react';
 import Modal from '../components/Modal';
+import { 
+  isPushSupported, 
+  isIosDevice, 
+  isStandalonePwa, 
+  getNotificationPermission, 
+  getExistingSubscription, 
+  subscribeUserToPush, 
+  unsubscribeUserFromPush, 
+  sendTestNotification 
+} from '../lib/pushNotifications';
 
 export default function SettingsView({ 
   currentUser, 
@@ -30,6 +40,65 @@ export default function SettingsView({
 
   const [houseSaved, setHouseSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  // Stato Notifiche Push
+  const [pushSupported, setPushSupported] = useState(true);
+  const [isIos, setIsIos] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [pushPermission, setPushPermission] = useState('default');
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState(null);
+
+  useEffect(() => {
+    const supported = isPushSupported();
+    setPushSupported(supported);
+    setIsIos(isIosDevice());
+    setIsStandalone(isStandalonePwa());
+    setPushPermission(getNotificationPermission());
+
+    if (supported) {
+      getExistingSubscription().then(sub => {
+        setIsPushSubscribed(!!sub);
+      });
+    }
+  }, []);
+
+  const handleTogglePush = async () => {
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      if (isPushSubscribed) {
+        await unsubscribeUserFromPush(currentUser?.id);
+        setIsPushSubscribed(false);
+        setPushFeedback({ type: 'success', text: 'Notifiche push disattivate su questo dispositivo.' });
+      } else {
+        await subscribeUserToPush(currentUser?.id);
+        setIsPushSubscribed(true);
+        setPushPermission('granted');
+        setPushFeedback({ type: 'success', text: 'Notifiche push attivate con successo! Riceverai avvisi anche ad app chiusa.' });
+      }
+    } catch (err) {
+      console.error('Errore gestione notifiche push:', err);
+      setPushFeedback({ type: 'error', text: err.message || 'Impossibile attivare le notifiche push.' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      await sendTestNotification(currentUser?.id);
+      setPushFeedback({ type: 'success', text: 'Notifica inviata! Controlla la tendina o il blocco schermo.' });
+    } catch (err) {
+      console.error('Errore invio notifica test:', err);
+      setPushFeedback({ type: 'error', text: err.message || 'Errore nell\'invio della notifica di prova.' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (currentUser) {
@@ -251,7 +320,108 @@ export default function SettingsView({
         </div>
       </div>
 
-      {/* 3. Interruttori Funzionalità Opzionali */}
+      {/* 3. Notifiche Push sul Telefono (anche ad App Chiusa) */}
+      <div className="card" style={{ marginBottom: '28px' }}>
+        <div className="card-header">
+          <h3 className="card-title">
+            <BellRing size={20} />
+            <span>Notifiche Push sul Telefono</span>
+          </h3>
+        </div>
+        <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: '16px' }}>
+          Ricevi avvisi con suono e vibrazione direttamente sul telefono quando un coinquilino aggiunge una spesa, un turno o una scadenza, anche con l'app chiusa.
+        </p>
+
+        {isIos && !isStandalone && (
+          <div style={{
+            backgroundColor: 'var(--warning-soft)',
+            border: '1px solid var(--warning)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            fontSize: '0.88rem',
+            color: 'var(--text)',
+            lineHeight: 1.5
+          }}>
+            <strong>📱 Requisito Apple per iPhone:</strong> Per ricevere notifiche a schermo spento, apri Safari, tocca il pulsante <strong>Condividi [↑]</strong> in basso e seleziona <strong>"Aggiungi alla schermata Home"</strong>. Successivamente apri l'app dalla Home e attiva le notifiche da qui!
+          </div>
+        )}
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px',
+          padding: '16px',
+          backgroundColor: 'var(--surface-soft)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border)'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: isPushSubscribed ? 'var(--accent)' : 'var(--muted)',
+                display: 'inline-block'
+              }} />
+              <strong style={{ fontSize: '0.95rem', color: 'var(--text)' }}>
+                {isPushSubscribed ? 'Notifiche Attive su questo dispositivo' : 'Notifiche Non Attive'}
+              </strong>
+            </div>
+            <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: 0 }}>
+              {isPushSubscribed 
+                ? 'Questo telefono riceverà avvisi sonori e vibrazioni per le spese e i turni.' 
+                : 'Abilita il dispositivo per non perderti spese e turni di pulizia della casa.'}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button 
+              className={`btn ${isPushSubscribed ? 'btn-secondary' : 'btn-primary'}`}
+              onClick={handleTogglePush}
+              disabled={pushLoading}
+            >
+              <Smartphone size={16} />
+              {pushLoading 
+                ? 'Operazione in corso...' 
+                : isPushSubscribed 
+                  ? 'Disattiva Notifiche' 
+                  : 'Attiva Notifiche sul Telefono'}
+            </button>
+
+            {isPushSubscribed && (
+              <button 
+                className="btn btn-secondary"
+                onClick={handleSendTestPush}
+                disabled={pushLoading}
+                title="Invia una notifica di test al telefono per provare subito"
+              >
+                <Send size={16} />
+                Prova Notifica
+              </button>
+            )}
+          </div>
+        </div>
+
+        {pushFeedback && (
+          <div style={{
+            marginTop: '14px',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '0.86rem',
+            backgroundColor: pushFeedback.type === 'error' ? 'var(--danger-soft)' : 'var(--accent-soft)',
+            color: pushFeedback.type === 'error' ? 'var(--danger)' : 'var(--accent)',
+            border: `1px solid ${pushFeedback.type === 'error' ? 'var(--danger)' : 'var(--accent)'}`
+          }}>
+            {pushFeedback.text}
+          </div>
+        )}
+      </div>
+
+      {/* 4. Interruttori Funzionalità Opzionali */}
       <div className="card" style={{ marginBottom: '28px' }}>
         <div className="card-header">
           <h3 className="card-title">

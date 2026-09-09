@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured, getLocalState, saveLocalState } from './lib/supabase';
 import { calculateBalancesAndSettlements } from './lib/debtAlgorithm';
+import { 
+  dispatchPushNotification, 
+  isPushSupported, 
+  getNotificationPermission, 
+  subscribeUserToPush 
+} from './lib/pushNotifications';
+import { BellRing, X } from 'lucide-react';
 
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
@@ -40,12 +47,38 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem('coinquilini_theme') || 'light');
+  const [showPushBanner, setShowPushBanner] = useState(false);
 
   // Applica e memorizza il tema visivo selezionato
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('coinquilini_theme', theme);
   }, [theme]);
+
+  // Controlla se proporre l'attivazione delle notifiche push sul dispositivo
+  useEffect(() => {
+    if (currentUser?.id && isPushSupported() && getNotificationPermission() === 'default') {
+      const dismissed = sessionStorage.getItem('coinquilini_dismissed_push_banner');
+      if (!dismissed) {
+        setShowPushBanner(true);
+      }
+    }
+  }, [currentUser]);
+
+  const handleEnablePushFromBanner = async () => {
+    try {
+      await subscribeUserToPush(currentUser?.id);
+      setShowPushBanner(false);
+    } catch (e) {
+      console.warn('Permesso push non concesso:', e);
+      setShowPushBanner(false);
+    }
+  };
+
+  const handleDismissPushBanner = () => {
+    sessionStorage.setItem('coinquilini_dismissed_push_banner', 'true');
+    setShowPushBanner(false);
+  };
 
   // Sincronizza il profilo Supabase in profiles con auth.users
   const syncUserProfile = async (authUser) => {
@@ -283,9 +316,11 @@ export default function App() {
   };
 
   // Helper per inviare notifiche agli altri membri della casa
-  const pushNotificationToHouse = async (title, message) => {
+  const pushNotificationToHouse = async (title, message, targetUrl = '/') => {
     if (!currentUser?.id) return;
     const otherMembers = members.filter(m => m.id !== currentUser.id);
+    const targetUserIds = otherMembers.map(m => m.id);
+
     if (isSupabaseConfigured && house?.id) {
       const rows = otherMembers.map(m => ({
         house_id: house.id,
@@ -312,6 +347,16 @@ export default function App() {
       state.notifications = newNotifs;
       saveLocalState(state);
       setNotifications([...newNotifs]);
+    }
+
+    // Invio automatico della notifica Push Web remota ai telefoni dei coinquilini
+    if (targetUserIds.length > 0) {
+      dispatchPushNotification({
+        userIds: targetUserIds,
+        title: title || 'Coinquilini',
+        body: message,
+        url: targetUrl
+      }).catch(err => console.warn('Invio notifica push remota non riuscito:', err));
     }
   };
 
@@ -898,6 +943,42 @@ export default function App() {
         />
 
         <main className="main-content">
+          {/* Banner di richiesta attivazione Notifiche Push */}
+          {showPushBanner && (
+            <div style={{
+              backgroundColor: 'var(--primary-soft)',
+              border: '1px solid var(--border)',
+              borderLeft: '4px solid var(--primary)',
+              borderRadius: 'var(--radius-md)',
+              padding: '12px 16px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <BellRing size={20} color="var(--primary)" />
+                <span style={{ fontSize: '0.88rem', color: 'var(--text)' }}>
+                  <strong>Attiva le Notifiche sul Telefono:</strong> ricevi avvisi sonori e vibrazioni quando i tuoi coinquilini aggiungono spese o turni.
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button className="btn btn-primary btn-sm" onClick={handleEnablePushFromBanner}>
+                  Attiva Notifiche
+                </button>
+                <button 
+                  onClick={handleDismissPushBanner}
+                  style={{ color: 'var(--muted)', padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                  title="Più tardi"
+                  aria-label="Chiudi avviso"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+          )}
           {currentTab === 'home' && (
             <HomeView 
               currentUser={currentUser}
