@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, CheckSquare, Trash2, CheckCircle2, RotateCcw } from 'lucide-react';
 import Modal from '../components/Modal';
 
@@ -15,13 +15,19 @@ export default function TasksView({
   const [assignedTo, setAssignedTo] = useState(currentUser?.id || (members[0]?.id || ''));
   const [frequency, setFrequency] = useState('Settimanale');
 
+  useEffect(() => {
+    if (!assignedTo && (currentUser?.id || members[0]?.id)) {
+      setAssignedTo(currentUser?.id || members[0]?.id || '');
+    }
+  }, [members, currentUser]);
+
   const handleCreate = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
     onAddTask({
       title: title.trim(),
-      assigned_to: assignedTo,
+      assigned_to: assignedTo ? assignedTo : null,
       frequency
     });
 

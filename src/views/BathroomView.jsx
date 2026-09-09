@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Bath, Trash2, AlertCircle } from 'lucide-react';
 import Modal from '../components/Modal';
 
@@ -16,6 +16,12 @@ export default function BathroomView({
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (!userId && (currentUser?.id || members[0]?.id)) {
+      setUserId(currentUser?.id || members[0]?.id || '');
+    }
+  }, [members, currentUser]);
 
   // Helper per convertire l'ora "HH:MM" in minuti totali dall'inizio della giornata
   const timeToMinutes = (timeStr) => {

@@ -40,14 +40,48 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Sincronizza il profilo Supabase in profiles con auth.users
+  const syncUserProfile = async (authUser) => {
+    if (!authUser?.id) return null;
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (profile) {
+        const merged = { ...authUser, ...profile };
+        setCurrentUser(merged);
+        return merged;
+      } else {
+        const newProfile = {
+          id: authUser.id,
+          full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Coinquilino',
+          email: authUser.email || ''
+        };
+        await supabase.from('profiles').upsert(newProfile);
+        const merged = { ...authUser, ...newProfile };
+        setCurrentUser(merged);
+        return merged;
+      }
+    } catch (e) {
+      console.error('Error syncing profile:', e);
+      setCurrentUser(authUser);
+      return authUser;
+    }
+  };
+
   // Initial Auth & Data Load
   useEffect(() => {
     async function init() {
       if (isSupabaseConfigured) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          setCurrentUser(session.user);
-          await loadSupabaseData(session.user.id);
+          const userWithProfile = await syncUserProfile(session.user);
+          if (userWithProfile?.id) {
+            await loadSupabaseData(userWithProfile.id);
+          }
         }
       } else {
         // Fallback Local Storage Mode
@@ -76,11 +110,14 @@ export default function App() {
     if (isSupabaseConfigured) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session?.user) {
-          setCurrentUser(session.user);
-          await loadSupabaseData(session.user.id);
+          const userWithProfile = await syncUserProfile(session.user);
+          if (userWithProfile?.id) {
+            await loadSupabaseData(userWithProfile.id);
+          }
         } else {
           setCurrentUser(null);
           setHouse(null);
+          setMembers([]);
         }
       });
       return () => subscription?.unsubscribe();
@@ -92,7 +129,7 @@ export default function App() {
     if (!isSupabaseConfigured || !house?.id) return;
 
     const channel = supabase
-      .channel('house-realtime-changes')
+      .channel(`house-realtime-${house.id}`)
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
         if (currentUser?.id) loadSupabaseData(currentUser.id);
       })
@@ -101,11 +138,23 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [house?.id]);
+  }, [house?.id, currentUser?.id]);
 
   const loadSupabaseData = async (userId) => {
+    if (!userId) return;
     try {
-      // 1. Carica membro e casa dell'utente
+      // 1. Carica e sincronizza profilo utente
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profileData) {
+        setCurrentUser(prev => ({ ...(prev || {}), ...profileData }));
+      }
+
+      // 2. Carica membro e casa dell'utente
       const { data: memberData } = await supabase
         .from('house_members')
         .select('*, house:houses(*)')
@@ -114,13 +163,14 @@ export default function App() {
 
       if (!memberData || !memberData.house) {
         setHouse(null);
+        setMembers([]);
         return;
       }
 
       const houseObj = memberData.house;
       setHouse(houseObj);
 
-      // 2. Carica tutti i membri della casa
+      // 3. Carica tutti i membri della casa
       const { data: allMembers } = await supabase
         .from('house_members')
         .select('*, profile:profiles(*)')
@@ -139,7 +189,7 @@ export default function App() {
       }));
       setMembers(formattedMembers);
 
-      // 3. Carica spese e partecipanti
+      // 4. Carica spese e partecipanti
       const { data: expData } = await supabase
         .from('expenses')
         .select('*, expense_participants(user_id)')
@@ -227,6 +277,7 @@ export default function App() {
 
   // Helper per inviare notifiche agli altri membri della casa
   const pushNotificationToHouse = async (title, message) => {
+    if (!currentUser?.id) return;
     const otherMembers = members.filter(m => m.id !== currentUser.id);
     if (isSupabaseConfigured && house?.id) {
       const rows = otherMembers.map(m => ({
@@ -236,7 +287,8 @@ export default function App() {
         message
       }));
       if (rows.length > 0) {
-        await supabase.from('notifications').insert(rows);
+        const { error } = await supabase.from('notifications').insert(rows);
+        if (error) console.error('Error sending notifications:', error);
       }
     } else {
       const state = getLocalState();
@@ -261,20 +313,26 @@ export default function App() {
     if (isSupabaseConfigured && house?.id) {
       const { data: newExp, error } = await supabase.from('expenses').insert({
         house_id: house.id,
-        paid_by: expData.paid_by,
+        paid_by: expData.paid_by || currentUser?.id,
         description: expData.description,
         amount: expData.amount,
         category: expData.category,
         date: expData.date
       }).select().single();
 
-      if (!error && newExp) {
+      if (error) {
+        console.error('Error adding expense:', error);
+        return;
+      }
+
+      if (newExp) {
         const pRows = (expData.participants || []).map(uId => ({
           expense_id: newExp.id,
           user_id: uId
         }));
         if (pRows.length > 0) {
-          await supabase.from('expense_participants').insert(pRows);
+          const { error: pError } = await supabase.from('expense_participants').insert(pRows);
+          if (pError) console.error('Error adding expense participants:', pError);
         }
         await pushNotificationToHouse('Nuova Spesa Registrata', `${currentUser?.full_name || 'Un coinquilino'} ha aggiunto: ${expData.description}`);
         loadSupabaseData(currentUser.id);
@@ -291,8 +349,9 @@ export default function App() {
 
   const handleDeleteExpense = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('expenses').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('expenses').delete().eq('id', id);
+      if (error) console.error('Error deleting expense:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.expenses = state.expenses.filter(e => e.id !== id);
@@ -303,14 +362,15 @@ export default function App() {
 
   const handleAddSettlement = async (setData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('settlements').insert({
+      const { error } = await supabase.from('settlements').insert({
         house_id: house.id,
         payer_id: setData.payer_id,
         receiver_id: setData.receiver_id,
         amount: setData.amount,
         date: setData.date
       });
-      loadSupabaseData(currentUser.id);
+      if (error) console.error('Error adding settlement:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newSet = { id: 'set-' + Date.now(), house_id: house?.id, ...setData };
@@ -322,12 +382,18 @@ export default function App() {
 
   const handleAddDeadline = async (dData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('deadlines').insert({
+      const { error } = await supabase.from('deadlines').insert({
         house_id: house.id,
-        ...dData
+        title: dData.title,
+        due_date: dData.due_date,
+        category: dData.category || 'Casa',
+        priority: dData.priority || 'media',
+        notes: dData.notes || null,
+        created_by: dData.created_by || currentUser?.id || null
       });
+      if (error) console.error('Error adding deadline:', error);
       await pushNotificationToHouse('Nuova Scadenza', `Nuova scadenza: ${dData.title}`);
-      loadSupabaseData(currentUser.id);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newDl = { id: 'dl-' + Date.now(), house_id: house?.id, is_completed: false, ...dData };
@@ -344,8 +410,9 @@ export default function App() {
     const newStatus = !item.is_completed;
 
     if (isSupabaseConfigured) {
-      await supabase.from('deadlines').update({ is_completed: newStatus }).eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('deadlines').update({ is_completed: newStatus }).eq('id', id);
+      if (error) console.error('Error updating deadline:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.deadlines = state.deadlines.map(d => d.id === id ? { ...d, is_completed: newStatus } : d);
@@ -356,8 +423,9 @@ export default function App() {
 
   const handleDeleteDeadline = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('deadlines').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('deadlines').delete().eq('id', id);
+      if (error) console.error('Error deleting deadline:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.deadlines = state.deadlines.filter(d => d.id !== id);
@@ -368,8 +436,14 @@ export default function App() {
 
   const handleAddTask = async (tData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('tasks').insert({ house_id: house.id, ...tData });
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('tasks').insert({
+        house_id: house.id,
+        title: tData.title,
+        assigned_to: tData.assigned_to ? tData.assigned_to : null,
+        frequency: tData.frequency || 'Settimanale'
+      });
+      if (error) console.error('Error adding task:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newTask = { id: 'task-' + Date.now(), house_id: house?.id, is_completed: false, ...tData };
@@ -385,11 +459,12 @@ export default function App() {
     const newStatus = !item.is_completed;
 
     if (isSupabaseConfigured) {
-      await supabase.from('tasks').update({ is_completed: newStatus }).eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('tasks').update({ is_completed: newStatus }).eq('id', id);
+      if (error) console.error('Error updating task:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
-      state.tasks = state.tasks.map(t => t.id === id ? { ...t, is_completed: newStatus } : t);
+      state.tasks = state.tasks.map(t => t.id === id ? { ...t, is_completed: newStatus } : d);
       saveLocalState(state);
       setTasks([...state.tasks]);
     }
@@ -397,8 +472,9 @@ export default function App() {
 
   const handleDeleteTask = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('tasks').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      if (error) console.error('Error deleting task:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.tasks = state.tasks.filter(t => t.id !== id);
@@ -409,8 +485,14 @@ export default function App() {
 
   const handleAddShoppingItem = async (sData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('shopping_list_items').insert({ house_id: house.id, ...sData });
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('shopping_list_items').insert({
+        house_id: house.id,
+        item_name: sData.item_name,
+        quantity: sData.quantity || null,
+        requested_by: sData.requested_by ? sData.requested_by : null
+      });
+      if (error) console.error('Error adding shopping item:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newItem = { id: 'shop-' + Date.now(), house_id: house?.id, is_purchased: false, ...sData };
@@ -426,8 +508,9 @@ export default function App() {
     const newStatus = !item.is_purchased;
 
     if (isSupabaseConfigured) {
-      await supabase.from('shopping_list_items').update({ is_purchased: newStatus }).eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('shopping_list_items').update({ is_purchased: newStatus }).eq('id', id);
+      if (error) console.error('Error updating shopping item:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.shopping_list = state.shopping_list.map(s => s.id === id ? { ...s, is_purchased: newStatus } : s);
@@ -438,8 +521,9 @@ export default function App() {
 
   const handleDeleteShoppingItem = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('shopping_list_items').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('shopping_list_items').delete().eq('id', id);
+      if (error) console.error('Error deleting shopping item:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.shopping_list = state.shopping_list.filter(s => s.id !== id);
@@ -450,8 +534,16 @@ export default function App() {
 
   const handleAddBathroomSlot = async (bData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('bathroom_slots').insert({ house_id: house.id, ...bData });
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('bathroom_slots').insert({
+        house_id: house.id,
+        user_id: bData.user_id || currentUser?.id,
+        date: bData.date,
+        start_time: bData.start_time,
+        duration_minutes: bData.duration_minutes,
+        notes: bData.notes || null
+      });
+      if (error) console.error('Error adding bathroom slot:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newSlot = { id: 'bath-' + Date.now(), house_id: house?.id, ...bData };
@@ -463,8 +555,9 @@ export default function App() {
 
   const handleDeleteBathroomSlot = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('bathroom_slots').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('bathroom_slots').delete().eq('id', id);
+      if (error) console.error('Error deleting bathroom slot:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.bathroom_slots = state.bathroom_slots.filter(b => b.id !== id);
@@ -475,9 +568,17 @@ export default function App() {
 
   const handleAddGuest = async (gData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('guests').insert({ house_id: house.id, ...gData });
+      const { error } = await supabase.from('guests').insert({
+        house_id: house.id,
+        guest_name: gData.guest_name,
+        host_id: gData.host_id || currentUser?.id,
+        date: gData.date,
+        stays_overnight: Boolean(gData.stays_overnight),
+        notes: gData.notes || null
+      });
+      if (error) console.error('Error adding guest:', error);
       await pushNotificationToHouse('Nuovo Ospite', `${currentUser?.full_name || 'Un coinquilino'} ha annunciato un ospite: ${gData.guest_name}`);
-      loadSupabaseData(currentUser.id);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newGuest = { id: 'guest-' + Date.now(), house_id: house?.id, ...gData };
@@ -490,8 +591,9 @@ export default function App() {
 
   const handleDeleteGuest = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('guests').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('guests').delete().eq('id', id);
+      if (error) console.error('Error deleting guest:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.guests = state.guests.filter(g => g.id !== id);
@@ -502,8 +604,13 @@ export default function App() {
 
   const handleAddRule = async (rData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('rules').insert({ house_id: house.id, ...rData });
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('rules').insert({
+        house_id: house.id,
+        rule_text: rData.rule_text,
+        created_by: rData.created_by || currentUser?.id || null
+      });
+      if (error) console.error('Error adding rule:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newRule = { id: 'rule-' + Date.now(), house_id: house?.id, ...rData };
@@ -515,8 +622,9 @@ export default function App() {
 
   const handleDeleteRule = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('rules').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('rules').delete().eq('id', id);
+      if (error) console.error('Error deleting rule:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.rules = state.rules.filter(r => r.id !== id);
@@ -527,9 +635,14 @@ export default function App() {
 
   const handleAddBoardMessage = async (mData) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('board_messages').insert({ house_id: house.id, ...mData });
+      const { error } = await supabase.from('board_messages').insert({
+        house_id: house.id,
+        user_id: mData.user_id || currentUser?.id,
+        message: mData.message
+      });
+      if (error) console.error('Error adding board message:', error);
       await pushNotificationToHouse('Nuovo Messaggio in Bacheca', `${currentUser?.full_name || 'Un coinquilino'}: ${mData.message}`);
-      loadSupabaseData(currentUser.id);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       const newMsg = { id: 'msg-' + Date.now(), house_id: house?.id, ...mData, created_at: new Date().toISOString() };
@@ -542,8 +655,9 @@ export default function App() {
 
   const handleDeleteBoardMessage = async (id) => {
     if (isSupabaseConfigured) {
-      await supabase.from('board_messages').delete().eq('id', id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('board_messages').delete().eq('id', id);
+      if (error) console.error('Error deleting board message:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.board_messages = state.board_messages.filter(m => m.id !== id);
@@ -553,8 +667,9 @@ export default function App() {
   };
 
   const handleMarkAllNotificationsRead = async () => {
-    if (isSupabaseConfigured) {
-      await supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUser.id);
+    if (isSupabaseConfigured && currentUser?.id) {
+      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUser.id);
+      if (error) console.error('Error marking notifications read:', error);
       loadSupabaseData(currentUser.id);
     } else {
       const state = getLocalState();
@@ -566,8 +681,9 @@ export default function App() {
 
   const handleUpdateHouse = async (houseUpdates) => {
     if (isSupabaseConfigured && house?.id) {
-      await supabase.from('houses').update(houseUpdates).eq('id', house.id);
-      loadSupabaseData(currentUser.id);
+      const { error } = await supabase.from('houses').update(houseUpdates).eq('id', house.id);
+      if (error) console.error('Error updating house:', error);
+      loadSupabaseData(currentUser?.id);
     } else {
       const state = getLocalState();
       state.house = { ...state.house, ...houseUpdates };
@@ -578,8 +694,19 @@ export default function App() {
 
   const handleUpdateProfile = async (profileUpdates) => {
     if (isSupabaseConfigured && currentUser?.id) {
-      await supabase.from('profiles').update(profileUpdates).eq('id', currentUser.id);
-      loadSupabaseData(currentUser.id);
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', currentUser.id)
+        .select()
+        .maybeSingle();
+
+      if (!error && data) {
+        setCurrentUser(prev => ({ ...(prev || {}), ...data }));
+      } else {
+        setCurrentUser(prev => ({ ...(prev || {}), ...profileUpdates }));
+      }
+      await loadSupabaseData(currentUser.id);
     } else {
       const state = getLocalState();
       state.user = { ...state.user, ...profileUpdates };
@@ -596,6 +723,18 @@ export default function App() {
     }
     setCurrentUser(null);
     setHouse(null);
+    setMembers([]);
+    setExpenses([]);
+    setSettlements([]);
+    setDeadlines([]);
+    setTasks([]);
+    setShoppingList([]);
+    setBathroomSlots([]);
+    setGuests([]);
+    setRules([]);
+    setBoardMessages([]);
+    setNotifications([]);
+    setCurrentTab('home');
   };
 
   const handleLeaveHouse = async () => {
@@ -646,17 +785,22 @@ export default function App() {
 
   // 1. Utente non autenticato -> Schermata Login/Registrazione
   if (!currentUser) {
-    return <AuthView onAuthSuccess={(user) => {
-      setCurrentUser(user);
-      if (isSupabaseConfigured) loadSupabaseData(user.id);
+    return <AuthView onAuthSuccess={async (user) => {
+      if (isSupabaseConfigured) {
+        const synced = await syncUserProfile(user);
+        if (synced?.id) await loadSupabaseData(synced.id);
+      } else {
+        setCurrentUser(user);
+      }
     }} />;
   }
 
   // 2. Utente autenticato ma non ancora in una casa -> Schermata Setup Casa
   if (!house) {
-    return <SetupHouseView currentUser={currentUser} onHouseJoined={() => {
-      if (isSupabaseConfigured) loadSupabaseData(currentUser.id);
-      else {
+    return <SetupHouseView currentUser={currentUser} onHouseJoined={async () => {
+      if (isSupabaseConfigured && currentUser?.id) {
+        await loadSupabaseData(currentUser.id);
+      } else {
         const state = getLocalState();
         setHouse(state.house);
         setMembers(state.members || []);

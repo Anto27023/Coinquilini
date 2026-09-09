@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, ShoppingBag, Check, Trash2, CheckCircle2, RotateCcw } from 'lucide-react';
 import Modal from '../components/Modal';
 
@@ -15,6 +15,12 @@ export default function ShoppingListView({
   const [quantity, setQuantity] = useState('');
   const [requestedBy, setRequestedBy] = useState(currentUser?.id || (members[0]?.id || ''));
 
+  useEffect(() => {
+    if (!requestedBy && (currentUser?.id || members[0]?.id)) {
+      setRequestedBy(currentUser?.id || members[0]?.id || '');
+    }
+  }, [members, currentUser]);
+
   const handleCreate = (e) => {
     e.preventDefault();
     if (!itemName.trim()) return;
@@ -22,7 +28,7 @@ export default function ShoppingListView({
     onAddItem({
       item_name: itemName.trim(),
       quantity: quantity.trim(),
-      requested_by: requestedBy
+      requested_by: requestedBy ? requestedBy : null
     });
 
     setItemName('');

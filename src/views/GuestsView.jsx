@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Users, Trash2, Moon, Sun } from 'lucide-react';
 import Modal from '../components/Modal';
 
@@ -16,13 +16,19 @@ export default function GuestsView({
   const [staysOvernight, setStaysOvernight] = useState(false);
   const [notes, setNotes] = useState('');
 
+  useEffect(() => {
+    if (!hostId && (currentUser?.id || members[0]?.id)) {
+      setHostId(currentUser?.id || members[0]?.id || '');
+    }
+  }, [members, currentUser]);
+
   const handleCreate = (e) => {
     e.preventDefault();
     if (!guestName.trim()) return;
 
     onAddGuest({
       guest_name: guestName.trim(),
-      host_id: hostId,
+      host_id: hostId || currentUser?.id,
       date,
       stays_overnight: staysOvernight,
       notes: notes.trim()

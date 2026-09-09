@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Copy, Check, LogOut, Save, User, Shield, Sliders, UserX, AlertTriangle } from 'lucide-react';
 import Modal from '../components/Modal';
 
@@ -26,6 +26,23 @@ export default function SettingsView({
 
   const [houseSaved, setHouseSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      setFullName(currentUser.full_name || '');
+      setAvatarUrl(currentUser.avatar_url || '');
+      setIban(currentUser.iban || '');
+      setPaypal(currentUser.paypal || '');
+      setRevolut(currentUser.revolut || '');
+      setSatispay(currentUser.satispay || '');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (house) {
+      setHouseName(house.name || '');
+    }
+  }, [house]);
 
   const handleCopyCode = () => {
     if (house?.invite_code) {

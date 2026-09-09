@@ -1,7 +1,8 @@
 -- ====================================================================
--- FUORISEDE FACILE (COINQUILINI) — SCHEMA DATABASE SUPABASE COMPLETO
+-- COINQUILINI — SCHEMA DATABASE SUPABASE COMPLETO & IDEMPOTENTE
 -- Istruzioni: Incolla ed esegui interamente questo script nell'SQL Editor
 -- di Supabase (https://app.supabase.com -> tuo progetto -> SQL Editor).
+-- È sicuro eseguirlo più volte (è completamente idempotente).
 -- ====================================================================
 
 -- 1. ABILITAZIONE ESTENSIONI NECESSARIE
@@ -22,18 +23,27 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Active RLS su profiles
+-- Attiva RLS su profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+-- Policy per profiles (rimuove prima se già presenti)
+DROP POLICY IF EXISTS "I profili sono visibili a tutti gli utenti autenticati" ON public.profiles;
 CREATE POLICY "I profili sono visibili a tutti gli utenti autenticati"
   ON public.profiles FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Ogni utente può aggiornare il proprio profilo" ON public.profiles;
 CREATE POLICY "Ogni utente può aggiornare il proprio profilo"
   ON public.profiles FOR UPDATE
   TO authenticated
   USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Ogni utente può inserire il proprio profilo" ON public.profiles;
+CREATE POLICY "Ogni utente può inserire il proprio profilo"
+  ON public.profiles FOR INSERT
+  TO authenticated
   WITH CHECK (auth.uid() = id);
 
 -- Trigger per creare automaticamente il profilo quando si registra un utente in auth.users
@@ -43,17 +53,29 @@ BEGIN
   INSERT INTO public.profiles (id, full_name, email)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1)),
-    NEW.email
-  );
+    COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1), 'Coinquilino'),
+    COALESCE(NEW.email, '')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    email = EXCLUDED.email;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Backfill per creare profili di utenti auth già registrati prima di questo script
+INSERT INTO public.profiles (id, full_name, email)
+SELECT 
+  id, 
+  COALESCE(raw_user_meta_data->>'full_name', SPLIT_PART(email, '@', 1), 'Coinquilino'), 
+  COALESCE(email, '')
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
 
 -- ====================================================================
 -- 3. TABELLA CASE (houses)
@@ -96,7 +118,7 @@ BEGIN
   ) INTO v_exists;
   RETURN COALESCE(v_exists, false);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security = off;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET row_security = off;
 
 CREATE OR REPLACE FUNCTION public.get_user_house_id()
 RETURNS UUID AS $$
@@ -109,23 +131,27 @@ BEGIN
   LIMIT 1;
   RETURN v_house_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security = off;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET row_security = off;
 
 -- Policy su HOUSES e HOUSE_MEMBERS
+DROP POLICY IF EXISTS "Le info della casa sono visibili ai suoi membri" ON public.houses;
 CREATE POLICY "Le info della casa sono visibili ai suoi membri"
   ON public.houses FOR SELECT
   TO authenticated
   USING (public.is_house_member(id));
 
+DROP POLICY IF EXISTS "Il proprietario può aggiornare le impostazioni della casa" ON public.houses;
 CREATE POLICY "Il proprietario può aggiornare le impostazioni della casa"
   ON public.houses FOR UPDATE
   TO authenticated
-  USING (public.is_house_member(id));
+  USING (public.is_house_member(id))
+  WITH CHECK (public.is_house_member(id));
 
+DROP POLICY IF EXISTS "I membri della casa vedono gli altri componenti" ON public.house_members;
 CREATE POLICY "I membri della casa vedono gli altri componenti"
   ON public.house_members FOR SELECT
   TO authenticated
-  USING (public.is_house_member(house_id));
+  USING (user_id = auth.uid() OR public.is_house_member(house_id));
 
 -- ====================================================================
 -- 6. RPC: CREAZIONE CASA ED INGRESSO TRAMITE CODICE INVITO
@@ -159,6 +185,15 @@ BEGIN
     RAISE EXCEPTION 'Utente non autenticato';
   END IF;
 
+  -- Assicura che esista il profilo per l'utente prima di procedere
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (
+    v_user_id,
+    COALESCE((SELECT raw_user_meta_data->>'full_name' FROM auth.users WHERE id = v_user_id), 'Coinquilino'),
+    COALESCE((SELECT email FROM auth.users WHERE id = v_user_id), '')
+  )
+  ON CONFLICT (id) DO NOTHING;
+
   -- Verifica che l'utente non appartenga già a una casa
   IF EXISTS (SELECT 1 FROM public.house_members WHERE user_id = v_user_id) THEN
     RAISE EXCEPTION 'Appartieni già a una casa. Devi prima uscirne per crearne una nuova.';
@@ -182,7 +217,7 @@ BEGIN
   SELECT json_build_object('house_id', v_house_id, 'invite_code', v_invite_code)::jsonb INTO v_result;
   RETURN v_result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security = off;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET row_security = off;
 
 -- RPC per entrare in una casa con codice
 CREATE OR REPLACE FUNCTION public.join_house(p_invite_code TEXT)
@@ -195,6 +230,15 @@ BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Utente non autenticato';
   END IF;
+
+  -- Assicura che esista il profilo per l'utente
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (
+    v_user_id,
+    COALESCE((SELECT raw_user_meta_data->>'full_name' FROM auth.users WHERE id = v_user_id), 'Coinquilino'),
+    COALESCE((SELECT email FROM auth.users WHERE id = v_user_id), '')
+  )
+  ON CONFLICT (id) DO NOTHING;
 
   IF EXISTS (SELECT 1 FROM public.house_members WHERE user_id = v_user_id) THEN
     RAISE EXCEPTION 'Appartieni già a una casa.';
@@ -212,7 +256,7 @@ BEGIN
   SELECT json_build_object('house_id', v_house_id)::jsonb INTO v_result;
   RETURN v_result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security = off;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET row_security = off;
 
 -- RPC per abbandonare la propria casa
 CREATE OR REPLACE FUNCTION public.leave_house()
@@ -230,7 +274,7 @@ BEGIN
   SELECT json_build_object('success', true)::jsonb INTO v_result;
   RETURN v_result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security = off;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET row_security = off;
 
 
 -- ====================================================================
@@ -250,6 +294,7 @@ CREATE TABLE IF NOT EXISTS public.expenses (
 );
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Tutto per i membri della casa su expenses" ON public.expenses;
 CREATE POLICY "Tutto per i membri della casa su expenses"
   ON public.expenses FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -263,6 +308,7 @@ CREATE TABLE IF NOT EXISTS public.expense_participants (
 );
 ALTER TABLE public.expense_participants ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri della casa vedono e gestiscono partecipanti spesa" ON public.expense_participants;
 CREATE POLICY "Membri della casa vedono e gestiscono partecipanti spesa"
   ON public.expense_participants FOR ALL TO authenticated
   USING (
@@ -290,6 +336,7 @@ CREATE TABLE IF NOT EXISTS public.settlements (
 );
 ALTER TABLE public.settlements ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri gestiscono i rimborsi" ON public.settlements;
 CREATE POLICY "Membri gestiscono i rimborsi"
   ON public.settlements FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -311,6 +358,7 @@ CREATE TABLE IF NOT EXISTS public.deadlines (
 );
 ALTER TABLE public.deadlines ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri gestiscono le scadenze" ON public.deadlines;
 CREATE POLICY "Membri gestiscono le scadenze"
   ON public.deadlines FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -330,6 +378,7 @@ CREATE TABLE IF NOT EXISTS public.tasks (
 );
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri gestiscono i turni" ON public.tasks;
 CREATE POLICY "Membri gestiscono i turni"
   ON public.tasks FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -348,6 +397,7 @@ CREATE TABLE IF NOT EXISTS public.shopping_list_items (
 );
 ALTER TABLE public.shopping_list_items ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri gestiscono la lista della spesa" ON public.shopping_list_items;
 CREATE POLICY "Membri gestiscono la lista della spesa"
   ON public.shopping_list_items FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -367,6 +417,7 @@ CREATE TABLE IF NOT EXISTS public.bathroom_slots (
 );
 ALTER TABLE public.bathroom_slots ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri gestiscono i turni bagno" ON public.bathroom_slots;
 CREATE POLICY "Membri gestiscono i turni bagno"
   ON public.bathroom_slots FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -386,6 +437,7 @@ CREATE TABLE IF NOT EXISTS public.guests (
 );
 ALTER TABLE public.guests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri gestiscono gli ospiti" ON public.guests;
 CREATE POLICY "Membri gestiscono gli ospiti"
   ON public.guests FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -402,6 +454,7 @@ CREATE TABLE IF NOT EXISTS public.rules (
 );
 ALTER TABLE public.rules ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri gestiscono le regole" ON public.rules;
 CREATE POLICY "Membri gestiscono le regole"
   ON public.rules FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -418,6 +471,7 @@ CREATE TABLE IF NOT EXISTS public.board_messages (
 );
 ALTER TABLE public.board_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Membri leggono e scrivono messaggi in bacheca" ON public.board_messages;
 CREATE POLICY "Membri leggono e scrivono messaggi in bacheca"
   ON public.board_messages FOR ALL TO authenticated
   USING (public.is_house_member(house_id))
@@ -437,32 +491,68 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "L'utente legge solo le proprie notifiche"
-  ON public.notifications FOR ALL TO authenticated
+DROP POLICY IF EXISTS "L'utente legge solo le proprie notifiche" ON public.notifications;
+DROP POLICY IF EXISTS "L'utente visualizza le proprie notifiche" ON public.notifications;
+CREATE POLICY "L'utente visualizza le proprie notifiche"
+  ON public.notifications FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "L'utente aggiorna le proprie notifiche" ON public.notifications;
+CREATE POLICY "L'utente aggiorna le proprie notifiche"
+  ON public.notifications FOR UPDATE
+  TO authenticated
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "L'utente elimina le proprie notifiche" ON public.notifications;
+CREATE POLICY "L'utente elimina le proprie notifiche"
+  ON public.notifications FOR DELETE
+  TO authenticated
+  USING (user_id = auth.uid());
+
+-- I membri della casa possono inviare notifiche ai coinquilini della stessa casa
+DROP POLICY IF EXISTS "Membri possono inviare notifiche nella casa" ON public.notifications;
+CREATE POLICY "Membri possono inviare notifiche nella casa"
+  ON public.notifications FOR INSERT
+  TO authenticated
+  WITH CHECK (public.is_house_member(house_id));
+
 
 -- ====================================================================
--- 8. ABILITAZIONE REALTIME DI SUPABASE
+-- 8. ABILITAZIONE REALTIME DI SUPABASE (Sicura ed Idempotente)
 -- Per aggiornare in tempo reale la dashboard di tutti i coinquilini
 -- ====================================================================
 DO $$
+DECLARE
+  tbl text;
+  tables text[] := ARRAY[
+    'expenses', 
+    'settlements', 
+    'deadlines', 
+    'tasks', 
+    'shopping_list_items', 
+    'bathroom_slots', 
+    'guests', 
+    'rules', 
+    'board_messages', 
+    'notifications',
+    'house_members',
+    'houses',
+    'profiles'
+  ];
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE 
-      public.expenses,
-      public.settlements,
-      public.deadlines,
-      public.tasks,
-      public.shopping_list_items,
-      public.bathroom_slots,
-      public.guests,
-      public.rules,
-      public.board_messages,
-      public.notifications;
+    FOREACH tbl IN ARRAY tables LOOP
+      BEGIN
+        EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+      EXCEPTION 
+        WHEN duplicate_object THEN
+          -- Già presente nella pubblicazione, ignora
+          NULL;
+        WHEN OTHERS THEN
+          NULL;
+      END;
+    END LOOP;
   END IF;
-EXCEPTION WHEN OTHERS THEN
-  -- Ignora se le tabelle sono già parte della pubblicazione
-  NULL;
 END $$;

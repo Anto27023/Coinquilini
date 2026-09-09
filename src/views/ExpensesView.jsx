@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, CreditCard, ArrowRight, Trash2, CheckCircle2, UserCheck, DollarSign } from 'lucide-react';
 import Modal from '../components/Modal';
 import { formatEuro } from '../lib/debtAlgorithm';
@@ -29,6 +29,17 @@ export default function ExpensesView({
   const [settlePayer, setSettlePayer] = useState(currentUser?.id || '');
   const [settleReceiver, setSettleReceiver] = useState('');
   const [settleAmount, setSettleAmount] = useState('');
+
+  useEffect(() => {
+    if (members.length > 0) {
+      if (!paidBy) {
+        setPaidBy(currentUser?.id || members[0]?.id || '');
+      }
+      if (selectedParticipants.length === 0) {
+        setSelectedParticipants(members.map(m => m.id));
+      }
+    }
+  }, [members, currentUser]);
 
   // Categorie disponibili in base ai feature flag attivi + default
   const categories = [];

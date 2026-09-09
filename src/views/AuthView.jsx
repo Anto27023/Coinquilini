@@ -84,8 +84,10 @@ export default function AuthView({ onAuthSuccess }) {
       setLoading(false);
       if (error) {
         setErrorMsg(translateError(error));
+      } else if (data?.session && data?.user) {
+        onAuthSuccess(data.user);
       } else {
-        setSuccessMsg('Registrazione completata, controlla l\'email per confermare l\'account.');
+        setSuccessMsg('Registrazione completata! Controlla l\'email per confermare l\'account.');
       }
     } else {
       // Local Fallback Register Simulation
