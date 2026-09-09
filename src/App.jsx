@@ -746,21 +746,76 @@ export default function App() {
 
   const handleLeaveHouse = async () => {
     if (isSupabaseConfigured) {
-      const { error } = await supabase.rpc('leave_house');
-      if (error) {
-        console.error('Error leaving house:', error);
-        return;
+      let success = false;
+      let lastError = null;
+
+      // 1. Prova prima tramite RPC dedicata leave_house()
+      try {
+        const { data, error: rpcError } = await supabase.rpc('leave_house');
+        if (!rpcError) {
+          success = true;
+        } else {
+          lastError = rpcError;
+          console.warn('RPC leave_house non riuscita, provo con eliminazione diretta:', rpcError);
+        }
+      } catch (e) {
+        lastError = e;
+        console.warn('Eccezione durante RPC leave_house:', e);
+      }
+
+      // 2. Fallback resiliente: eliminazione diretta del record da house_members
+      if (!success && currentUser?.id) {
+        try {
+          const { error: deleteError } = await supabase
+            .from('house_members')
+            .delete()
+            .eq('user_id', currentUser.id);
+
+          if (!deleteError) {
+            success = true;
+          } else {
+            lastError = deleteError;
+            console.error('Errore eliminazione diretta da house_members:', deleteError);
+          }
+        } catch (e) {
+          lastError = e;
+          console.error('Eccezione durante eliminazione diretta:', e);
+        }
+      }
+
+      if (!success) {
+        const msg = lastError?.message || lastError?.error_description || 'Impossibile abbandonare la casa. Assicurati di aver aggiornato lo schema SQL in Supabase.';
+        throw new Error(msg);
       }
     } else {
       const state = getLocalState();
       state.house = null;
       state.members = [];
+      state.expenses = [];
+      state.settlements = [];
+      state.deadlines = [];
+      state.tasks = [];
+      state.shopping_list = [];
+      state.bathroom_slots = [];
+      state.guests = [];
+      state.rules = [];
+      state.board_messages = [];
       state.notifications = [];
       saveLocalState(state);
     }
 
+    // Reset completo di tutte le informazioni della casa nel frontend
     setHouse(null);
     setMembers([]);
+    setExpenses([]);
+    setSettlements([]);
+    setDeadlines([]);
+    setTasks([]);
+    setShoppingList([]);
+    setBathroomSlots([]);
+    setGuests([]);
+    setRules([]);
+    setBoardMessages([]);
     setNotifications([]);
     setCurrentTab('home');
   };

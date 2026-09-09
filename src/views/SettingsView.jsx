@@ -17,6 +17,8 @@ export default function SettingsView({
   const [houseName, setHouseName] = useState(house?.name || '');
   const [copiedCode, setCopiedCode] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState(null);
 
   // Stato Profilo Personale
   const [fullName, setFullName] = useState(currentUser?.full_name || '');
@@ -425,7 +427,16 @@ export default function SettingsView({
       </div>
 
       {/* MODALE CONFERMA ABBANDONA CASA */}
-      <Modal isOpen={isLeaveModalOpen} onClose={() => setIsLeaveModalOpen(false)} title="Confermi di voler abbandonare la casa?">
+      <Modal 
+        isOpen={isLeaveModalOpen} 
+        onClose={() => {
+          if (!isLeaving) {
+            setIsLeaveModalOpen(false);
+            setLeaveError(null);
+          }
+        }} 
+        title="Confermi di voler abbandonare la casa?"
+      >
         <div style={{ textAlign: 'center', padding: '10px 0' }}>
           <div style={{
             width: '48px',
@@ -443,15 +454,54 @@ export default function SettingsView({
           <p style={{ fontSize: '0.95rem', color: 'var(--text)', marginBottom: '12px' }}>
             Stai per uscire da <strong>{house?.name}</strong>.
           </p>
-          <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '24px' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: leaveError ? '12px' : '24px' }}>
             Se abbandoni la casa non avrai più accesso ai dati condivisi né riceverai notifiche. Potrai comunque creare o accedere a un'altra casa.
           </p>
+
+          {leaveError && (
+            <div style={{
+              backgroundColor: 'var(--danger-soft)',
+              color: 'var(--danger)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginBottom: '20px',
+              textAlign: 'left',
+              lineHeight: 1.4
+            }}>
+              <strong>Attenzione:</strong> {leaveError}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn btn-secondary btn-block" onClick={() => setIsLeaveModalOpen(false)}>
+            <button 
+              className="btn btn-secondary btn-block" 
+              onClick={() => {
+                setIsLeaveModalOpen(false);
+                setLeaveError(null);
+              }}
+              disabled={isLeaving}
+            >
               Annulla
             </button>
-            <button className="btn btn-danger btn-block" onClick={onLeaveHouse}>
-              Sì, Abbandona
+            <button 
+              className="btn btn-danger btn-block" 
+              onClick={async () => {
+                try {
+                  setIsLeaving(true);
+                  setLeaveError(null);
+                  await onLeaveHouse();
+                  setIsLeaveModalOpen(false);
+                } catch (err) {
+                  console.error('Errore durante abbandono casa:', err);
+                  setLeaveError(err.message || 'Si è verificato un errore durante l\'uscita dalla casa. Riprova.');
+                } finally {
+                  setIsLeaving(false);
+                }
+              }}
+              disabled={isLeaving}
+            >
+              {isLeaving ? 'Uscita in corso...' : 'Sì, Abbandona'}
             </button>
           </div>
         </div>

@@ -153,6 +153,12 @@ CREATE POLICY "I membri della casa vedono gli altri componenti"
   TO authenticated
   USING (user_id = auth.uid() OR public.is_house_member(house_id));
 
+DROP POLICY IF EXISTS "Un utente può rimuovere se stesso da house_members" ON public.house_members;
+CREATE POLICY "Un utente può rimuovere se stesso da house_members"
+  ON public.house_members FOR DELETE
+  TO authenticated
+  USING (user_id = auth.uid());
+
 -- ====================================================================
 -- 6. RPC: CREAZIONE CASA ED INGRESSO TRAMITE CODICE INVITO
 -- ====================================================================
@@ -263,18 +269,54 @@ CREATE OR REPLACE FUNCTION public.leave_house()
 RETURNS JSONB AS $$
 DECLARE
   v_user_id UUID := auth.uid();
+  v_house_id UUID;
+  v_is_owner BOOLEAN;
+  v_remaining_count INT;
   v_result JSONB;
 BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Utente non autenticato';
   END IF;
 
+  -- Recupera casa e ruolo dell'utente
+  SELECT house_id, (role = 'owner') INTO v_house_id, v_is_owner
+  FROM public.house_members
+  WHERE user_id = v_user_id
+  LIMIT 1;
+
+  IF v_house_id IS NULL THEN
+    RETURN json_build_object('success', true, 'message', 'Nessuna casa attiva per questo utente')::jsonb;
+  END IF;
+
+  -- Rimuovi l'utente dalla tabella house_members
   DELETE FROM public.house_members WHERE user_id = v_user_id;
 
-  SELECT json_build_object('success', true)::jsonb INTO v_result;
+  -- Verifica membri rimanenti
+  SELECT COUNT(*) INTO v_remaining_count
+  FROM public.house_members
+  WHERE house_id = v_house_id;
+
+  -- Se era owner e restano altri coinquilini, promuovi automaticamente il coinquilino più anziano ad owner
+  IF v_is_owner AND v_remaining_count > 0 THEN
+    UPDATE public.house_members
+    SET role = 'owner'
+    WHERE id = (
+      SELECT id FROM public.house_members
+      WHERE house_id = v_house_id
+      ORDER BY created_at ASC
+      LIMIT 1
+    );
+  END IF;
+
+  SELECT json_build_object('success', true, 'remaining_members', v_remaining_count)::jsonb INTO v_result;
   RETURN v_result;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET row_security = off;
+
+-- Permessi di esecuzione espliciti sulle RPC per utenti autenticati
+GRANT EXECUTE ON FUNCTION public.create_house(TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.join_house(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.leave_house() TO authenticated;
 
 
 -- ====================================================================
